@@ -55,5 +55,4 @@ public class EmployeeClass {
     public void setDepno(DepartmentClass depno) {
         this.depno = depno;
     }
-
 }

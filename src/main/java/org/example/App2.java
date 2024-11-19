@@ -1,99 +1,100 @@
 package org.example;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Persistence;
-
-import java.util.Set;
+import jakarta.persistence.PersistenceException;
 import org.hibernate.*;
 import org.hibernate.cfg.Configuration;
 
 public class App2 {
-    // Start the transaction to input data
-    public static void main( String[] args ) {
-        SessionFactory sessionFactory = null;
-        try {
-            sessionFactory = new Configuration().configure().buildSessionFactory();
+    public static void main(String[] args) {
+        // Open the SessionFactory and Session using a try-with-resources
+        // They are opened from a utility class that returns sessions
+        try (SessionFactory sessionFactory = HibernateUtil.getSessionFactory();
+             Session session = HibernateUtil.openSession(sessionFactory)) {
+
+            Transaction transaction = session.beginTransaction();
+
+            try {
+                // Setter and Constructor initialization of departments
+                DepartmentClass dept1 = createDepartment(50, "I+D", "Palma");
+                DepartmentClass dept2 = new DepartmentClass("Research", "Manacor", 51);
+
+                //System.out.println(dept1);
+                //System.out.println(dept2);
+
+                // Create employees and assign to department
+                EmployeeClass emp1 = createEmployee("Jose", "Jefe", dept1);
+                EmployeeClass emp2 = createEmployee("Pepe", "Analista", dept1);
+                EmployeeClass emp3 = createEmployee("Luis", "Programador", dept1);
+
+                // Reassign emp3 to a different department without persisting the new department
+                DepartmentClass dept3 = new DepartmentClass();
+                dept3.setId(10);
+                emp3.setDepno(dept3);
+
+                // Persist entities
+                session.persist(dept1);
+                session.persist(dept2);
+                session.persist(emp1);
+                session.persist(emp2);
+                session.persist(emp3);
+                // Commit the changes to the DB (if possible)
+                transaction.commit();
+                // No need to manually close the Objects because they are inside a try-with-resources
+            } catch (IllegalStateException | PersistenceException e) {
+                System.err.println("Error during transaction. Rolling back.");
+                e.printStackTrace();
+                transaction.rollback();
+                System.exit(1);
+            }
         } catch (Exception e) {
+            System.err.println("SessionFactory initialization failed.");
             e.printStackTrace();
+            System.exit(1);
         }
-        Session session = sessionFactory.openSession();
-        Transaction transaction = session.beginTransaction();
-
-        final int EMPLOYEE_AMOUNT = 3;
-        System.out.println("Session open? " + session.isOpen());
-        // Using setters
-        DepartmentClass dept = new DepartmentClass();
-        dept.setId(50);
-        dept.setUbicacion("Palma");
-        dept.setNombre("I+D");
-
-        System.out.println(dept);
-
-        // Using constructor
-        DepartmentClass dept2 = new DepartmentClass("Research", "Manacor", 51);
-        System.out.println(dept2);
-
-        for (EmployeeClass employeeClass : dept.getEmpleadosGroup()) {
-            System.out.println(employeeClass);
-        }
-        // Employees creation
-        String[] jobPositions = {"Jefe", "Analista", "Programador"};
-        //createEmployees(EMPLOYEE_AMOUNT, jobPositions, dept, session);
-
-        EmployeeClass e1 = new EmployeeClass();
-        e1.setNombre("Jose");
-        e1.setPuesto(jobPositions[0]);
-        e1.setDepno(dept);
-
-        EmployeeClass e2 = new EmployeeClass();
-        e2.setNombre("Pepe");
-        e2.setPuesto(jobPositions[1]);
-        e2.setDepno(dept);
-
-        EmployeeClass e3 = new EmployeeClass();
-        e3.setNombre("Luis");
-        e3.setPuesto(jobPositions[2]);
-        e3.setDepno(dept);
-
-        // Change the department number
-        // In order to do this, since we can't modify the ID of the Department without passing a Department
-        // Class, I create a whole new Department which is empty and only has the department ID that we want
-        // to change to employee to. However, it is important to not persist this "new" department
-        DepartmentClass dept3 = new DepartmentClass();
-        dept3.setId(10);
-        e3.setDepno(dept3);
-
-        // Persist
-        session.persist(dept);
-        session.persist(dept2);
-        session.persist(e1);
-        session.persist(e2);
-        session.persist(e3);
-        transaction.commit();
-
-        // Free resources
-        session.close();
-        sessionFactory.close();
-        System.exit(0);
     }
 
-    static void createEmployees(int amount, String[] jobPositions, DepartmentClass dept, Session session) {
+    private static DepartmentClass createDepartment(int id, String name, String location) {
+        DepartmentClass department = new DepartmentClass();
+        department.setId(id);
+        department.setNombre(name);
+        department.setUbicacion(location);
+        return department;
+    }
 
-        System.out.println("Inside createEmployees method");
-        System.out.println(dept);
+    private static EmployeeClass createEmployee(String name, String position, DepartmentClass department) {
+        EmployeeClass employee = new EmployeeClass();
+        employee.setNombre(name);
+        employee.setPuesto(position);
+        employee.setDepno(department);
+        return employee;
+    }
 
-        for (int i = 0; i < amount; i++) {
-            EmployeeClass employee = new EmployeeClass();
-            employee.setId(15 + i);
-            employee.setNombre("Employee" + (i + 1));
-            employee.setPuesto(jobPositions[i]);
-            employee.setDepno(dept);
-            session.persist(employee);
-            System.out.println(employee);
+    // Utility class for Hibernate session and transaction management.
+    public static class HibernateUtil {
+        private static final SessionFactory SESSION_FACTORY;
+
+        static {
+            try {
+                SESSION_FACTORY = new Configuration().configure().buildSessionFactory();
+            } catch (Throwable ex) {
+                System.err.println("Initial SessionFactory creation failed: " + ex);
+                throw new ExceptionInInitializerError(ex);
+            }
+        }
+
+        public static SessionFactory getSessionFactory() {
+            return SESSION_FACTORY;
+        }
+
+        public static Session openSession(SessionFactory sessionFactory) {
+            if (sessionFactory == null) {
+                throw new IllegalStateException("SessionFactory is not initialized.");
+            }
+            return sessionFactory.openSession();
         }
     }
 }
+
 
 /*
 https://www.digitalocean.com/community/tutorials/jpa-hibernate-annotations

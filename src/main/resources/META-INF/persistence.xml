@@ -15,3 +15,5 @@
     </properties>
   </persistence-unit>
 </persistence>
+
+<!-- There's no need for this file -->
